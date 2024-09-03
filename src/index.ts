@@ -14,6 +14,10 @@ export interface CacheControlMapping {
   [glob: string]: string;
 }
 
+export interface MetadataMapping {
+  [glob: string]: Record<string, string>;
+}
+
 interface AwsCredentials {
   accessKeyId: string;
   secretAccessKey: string;
@@ -27,6 +31,7 @@ interface Options {
    */
   delete?: boolean;
   cacheControlMapping?: CacheControlMapping;
+  metadataMapping?: MetadataMapping;
   awsCredentials?: AwsCredentials;
   /**
    * S3 Bucket prefix to upload to
@@ -61,6 +66,14 @@ function getCacheControl(
   for (let [glob, cacheControl] of Object.entries(cacheControlMapping)) {
     if (minimatch(filepath, glob, { matchBase: true })) {
       return cacheControl;
+    }
+  }
+}
+
+function getMetadata(filepath: string, metadataMapping: MetadataMapping) {
+  for (let [glob, metadata] of Object.entries(metadataMapping)) {
+    if (minimatch(filepath, glob, { matchBase: true })) {
+      return metadata;
     }
   }
 }
@@ -123,6 +136,7 @@ async function uploadToS3(
   filePath: string,
   prefix: string = "",
   cacheControlMapping: CacheControlMapping = DEFAULT_CACHE_CONTROL_MAPPING,
+  metadataMapping: MetadataMapping = {},
   awsCredentials?: AwsCredentials
 ) {
   _s3client ??= new S3Client({
@@ -134,6 +148,7 @@ async function uploadToS3(
     Body: readFileSync(filePath),
     CacheControl: getCacheControl(filePath, cacheControlMapping),
     ContentType: contentType(extname(filePath)) || undefined,
+    Metadata: getMetadata(filePath, metadataMapping),
   };
   await _s3client.send(new PutObjectCommand(params)).catch((err: any) => {
     if (err.Code === "PermanentRedirect") {
@@ -151,7 +166,9 @@ async function uploadToS3(
   console.log(
     `Uploaded s3://${params.Bucket}/${params.Key} | cache-control=${
       params.CacheControl ?? "<empty>"
-    } | content-type=${params.ContentType ?? "<empty>"}`
+    } | content-type=${params.ContentType ?? "<empty>"} | metadata=${
+      params.Metadata == undefined ? "<empty>" : JSON.stringify(params.Metadata)
+    }`
   );
   return params.Key!;
 }
@@ -249,6 +266,7 @@ export default async function s3SpaUpload(
         filePath,
         options.prefix,
         options.cacheControlMapping,
+        options.metadataMapping,
         options.awsCredentials
       ),
     options.concurrency

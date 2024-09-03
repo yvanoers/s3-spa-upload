@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "fs";
-import s3SpaUpload, { CacheControlMapping } from "./index";
+import s3SpaUpload, { CacheControlMapping, MetadataMapping } from "./index";
 import yargs from "yargs";
 
 async function main() {
@@ -20,6 +20,12 @@ async function main() {
     .describe(
       "m",
       "Path to custom JSON file that maps glob patterns to cache-control headers"
+    )
+    .string("md")
+    .alias("md", "metadata-mapping")
+    .describe(
+      "md",
+      "Path to custom JSON file that maps glob patterns to metadata"
     )
     .string("p")
     .alias("p", "prefix")
@@ -47,11 +53,18 @@ async function main() {
       readFileSync(args["cache-control-mapping"]).toString()
     );
   }
+  let metadataMapping: MetadataMapping | undefined;
+  if (args["cache-control-mapping"]) {
+    cacheControlMapping = JSON.parse(
+      readFileSync(args["metadata-mapping"]).toString()
+    );
+  }
   await s3SpaUpload(args.directory!, args.bucketname!, {
     delete: args.delete,
     cacheControlMapping,
     prefix: args.prefix,
     concurrency: args.concurrency,
+    metadataMapping,
   });
 }
 
